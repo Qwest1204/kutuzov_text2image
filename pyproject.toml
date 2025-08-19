@@ -1,0 +1,18 @@
+[project]
+name = "text2image"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "MrQwest",email = "128bit@128bit.xyz"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "notebook (>=7.4.5,<8.0.0)",
+    "sentence-transformers (>=5.1.0,<6.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
