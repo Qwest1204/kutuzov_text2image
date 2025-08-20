@@ -8,6 +8,7 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import config
+from tqdm import tqdm
 from torchvision.utils import save_image
 from scipy.stats import truncnorm
 from torchvision.transforms import Compose, Resize, ToTensor
@@ -103,7 +104,7 @@ def get_loader(image_size):
     num_samples = len(dataset['train'])
     dataset_train = [{"pix": None, "emb": None} for _ in range(num_samples)]
 
-    for i in range(num_samples):
+    for i in tqdm(range(num_samples)):
         dataset_train[i]['pix'] = jitter(dataset['train'][i]['image'].convert("RGB"))
         dataset_train[i]['emb'] = torch.from_numpy(config.MODEL_EMBEDDER.encode(dataset['train'][i]['prompt']))
 
