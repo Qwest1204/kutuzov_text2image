@@ -3,10 +3,10 @@ import torch
 from math import log2
 from sentence_transformers import SentenceTransformer
 
-START_TRAIN_AT_IMG_SIZE = 8
+START_TRAIN_AT_IMG_SIZE = 4
 ITER = 0
-DATASET = 'large_random_500k'
-MODEL_EMBEDDER = model = SentenceTransformer("nomic-ai/nomic-embed-text-v1.5", trust_remote_code=True)
+DATASET = '2m_random_1k'
+MODEL_EMBEDDER = SentenceTransformer("nomic-ai/nomic-embed-text-v1.5", trust_remote_code=True, )
 CHECKPOINT_GEN = "generator.pth"
 CHECKPOINT_CRITIC = "critic.pth"
 DEVICE = "mps" if torch.mps.is_available() else "cpu"

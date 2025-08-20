@@ -11,6 +11,7 @@ from torchvision.transforms import Compose, Resize, ToTensor
 
 from tqdm import tqdm
 
+import config
 from utils import *
 from config import *
 from CProGAN import *
@@ -18,7 +19,6 @@ from CProGAN import *
 def train_fn(
         critic,
         gen,
-        loader,
         dataset,
         step,
         alpha,
@@ -29,10 +29,11 @@ def train_fn(
         scaler_gen,
         scaler_critic,
 ):
-    loop = tqdm(loader, leave=True)
+    bs = config.BATCH_SIZES[int(log2(config.START_TRAIN_AT_IMG_SIZE / 4))]
+    loop = tqdm(dataset['train'].iter(batch_size=bs), leave=True)
     for batch_idx, data in enumerate(loop):
-        real = data['pix'].to(config.DEVICE)
-        embed = data['emb'].to(config.DEVICE)
+        real = torch.cat(data['image']).view(-1, config.CHANNELS_IMG, config.START_TRAIN_AT_IMG_SIZE, config.START_TRAIN_AT_IMG_SIZE).to(config.DEVICE)
+        embed = config.MODEL_EMBEDDER.encode(data['prompt'], batch_size=bs, show_progress_bar=False, convert_to_tensor=True, convert_to_numpy=False).to(config.DEVICE)
         cur_batch_size = real.shape[0]
 
         # Train Critic: max E[critic(real)] - E[critic(fake)] <-> min -E[critic(real)] + E[critic(fake)]
@@ -129,7 +130,7 @@ def main():
     step = int(log2(config.START_TRAIN_AT_IMG_SIZE / 4))
     for num_epochs in config.PROGRESSIVE_EPOCHS[step:]:
         alpha = 1e-5  # start with very low alpha
-        loader, dataset = get_loader(4 * 2 ** step)  # 4->0, 8->1, 16->2, 32->3, 64 -> 4
+        dataset = get_dataset(4 * 2 ** step)  # 4->0, 8->1, 16->2, 32->3, 64 -> 4
         print(f"Current image size: {4 * 2 ** step}")
 
         for epoch in range(num_epochs):
@@ -137,7 +138,6 @@ def main():
             tensorboard_step, alpha = train_fn(
                 critic,
                 gen,
-                loader,
                 dataset,
                 step,
                 alpha,

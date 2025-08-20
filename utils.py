@@ -95,25 +95,15 @@ def generate_examples(gen, steps, truncation=0.7, n=100):
             save_image(img*0.5+0.5, f"saved_examples/img_{i}.png")
     gen.train()
 
-def get_loader(image_size):
+def get_dataset(image_size):
     dataset = load_dataset('poloclub/diffusiondb', config.DATASET).select_columns(['image', 'prompt'])
     jitter = Compose([
         Resize((image_size, image_size)),
         ToTensor(),
     ])
-    num_samples = len(dataset['train'])
-    dataset_train = [{"pix": None, "emb": None} for _ in range(num_samples)]
-
-    for i in tqdm(range(num_samples)):
-        dataset_train[i]['pix'] = jitter(dataset['train'][i]['image'].convert("RGB"))
-        dataset_train[i]['emb'] = torch.from_numpy(config.MODEL_EMBEDDER.encode(dataset['train'][i]['prompt']))
-
-    batch_size = config.BATCH_SIZES[int(log2(image_size / 4))]
-
-    train_dataloader = DataLoader(
-        dataset_train,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=0  # Отключение многопроцессорной обработки
-    )
-    return train_dataloader, dataset_train
+    def transforms(examples):
+        examples["image"] = [jitter(image.convert("RGB")) for image in examples["image"]]
+        return examples
+    #batch_size = config.BATCH_SIZES[int(log2(image_size / 4))]
+    dataset.set_transform(transforms)
+    return dataset
