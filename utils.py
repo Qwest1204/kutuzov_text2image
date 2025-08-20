@@ -5,7 +5,7 @@ import os
 import torchvision
 from math import log2
 from datasets import load_dataset
-from torch.utils.data import DataLoader, IterableDataset
+from torch.utils.data import DataLoader
 import torch.nn as nn
 import config
 from tqdm import tqdm
@@ -96,38 +96,24 @@ def generate_examples(gen, steps, truncation=0.7, n=100):
     gen.train()
 
 def get_loader(image_size):
-    # Load the dataset in streaming mode for memory-efficient processing
-    dataset = load_dataset('poloclub/diffusiondb', config.DATASET, streaming=True)['train']
-
+    dataset = load_dataset('poloclub/diffusiondb', config.DATASET).select_columns(['image', 'prompt'])
     jitter = Compose([
         Resize((image_size, image_size)),
         ToTensor(),
     ])
+    num_samples = len(dataset['train'])
+    dataset_train = [{"pix": None, "emb": None} for _ in range(num_samples)]
 
-    class StreamingDataset(IterableDataset):
-        def __init__(self, hf_dataset, transform, embedder):
-            self.hf_dataset = hf_dataset
-            self.transform = transform
-            self.embedder = embedder
-
-        def __iter__(self):
-            for sample in tqdm(self.hf_dataset):
-                # Assume 'prompt' is initially a string; encode it accordingly
-                pix = self.transform(sample['image'].convert("RGB"))
-                emb = torch.from_numpy(self.embedder.encode(sample['prompt']))
-                yield {"pix": pix, "emb": emb}
-
-    # Optional: Add limited shuffling if needed (adjust buffer_size based on memory constraints)
-    # dataset = dataset.shuffle(buffer_size=1000)
+    for i in tqdm(range(num_samples)):
+        dataset_train[i]['pix'] = jitter(dataset['train'][i]['image'].convert("RGB"))
+        dataset_train[i]['emb'] = torch.from_numpy(config.MODEL_EMBEDDER.encode(dataset['train'][i]['prompt']))
 
     batch_size = config.BATCH_SIZES[int(log2(image_size / 4))]
 
     train_dataloader = DataLoader(
-        StreamingDataset(dataset, jitter, config.MODEL_EMBEDDER),
+        dataset_train,
         batch_size=batch_size,
-        shuffle=False,  # Shuffling is handled via dataset.shuffle if enabled; full shuffle not possible in pure streaming
-        num_workers=0  # Disable multiprocessing for compatibility with streaming
+        shuffle=True,
+        num_workers=0  # Отключение многопроцессорной обработки
     )
-
-    # Since the dataset is streamed, the full in-memory dataset_train is not created; return None or an empty list as placeholder
-    return train_dataloader, None
+    return train_dataloader, dataset_train
