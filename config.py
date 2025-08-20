@@ -4,7 +4,8 @@ from math import log2
 from sentence_transformers import SentenceTransformer
 
 START_TRAIN_AT_IMG_SIZE = 8
-DATASET = 'large_random_10k'
+ITER = 0
+DATASET = 'large_random_500k'
 MODEL_EMBEDDER = model = SentenceTransformer("nomic-ai/nomic-embed-text-v1.5", trust_remote_code=True)
 CHECKPOINT_GEN = "generator.pth"
 CHECKPOINT_CRITIC = "critic.pth"
