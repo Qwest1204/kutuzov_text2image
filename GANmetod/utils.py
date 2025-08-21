@@ -3,12 +3,8 @@ import random
 import numpy as np
 import os
 import torchvision
-from math import log2
 from datasets import load_dataset
-from torch.utils.data import DataLoader
-import torch.nn as nn
 import config
-from tqdm import tqdm
 from torchvision.utils import save_image
 from scipy.stats import truncnorm
 from torchvision.transforms import Compose, Resize, ToTensor
@@ -62,7 +58,7 @@ def save_checkpoint(model, optimizer, filename="my_checkpoint.pth.tar"):
 
 def load_checkpoint(checkpoint_file, model, optimizer, lr):
     print("=> Loading checkpoint")
-    checkpoint = torch.load(checkpoint_file, map_location="cuda")
+    checkpoint = torch.load(checkpoint_file, map_location="mps")
     model.load_state_dict(checkpoint["state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer"])
 

@@ -1,19 +1,8 @@
-import torch
-import torch.nn as nn
 import torch.optim as optim
 from sympy.printing.pytorch import torch
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from datasets import load_dataset
-from sentence_transformers import SentenceTransformer
-from torchvision.transforms import Compose, Resize, ToTensor
-
-from tqdm import tqdm
-
-import config
 from utils import *
-from config import *
 from CProGAN import *
 
 def train_fn(
@@ -30,31 +19,37 @@ def train_fn(
         scaler_critic,
 ):
     bs = config.BATCH_SIZES[int(log2(config.START_TRAIN_AT_IMG_SIZE / 4))]
+    current_size = 4 * (2 ** step)
     loop = tqdm(dataset['train'].iter(batch_size=bs), leave=True)
     for batch_idx, data in enumerate(loop):
-        real = torch.cat(data['image']).view(-1, config.CHANNELS_IMG, config.START_TRAIN_AT_IMG_SIZE, config.START_TRAIN_AT_IMG_SIZE).to(config.DEVICE)
-        embed = config.MODEL_EMBEDDER.encode(data['prompt'], batch_size=bs, show_progress_bar=False, convert_to_tensor=True, convert_to_numpy=False).to(config.DEVICE)
+        real = torch.cat(data['image']).view(-1, config.CHANNELS_IMG, config.START_TRAIN_AT_IMG_SIZE, config.START_TRAIN_AT_IMG_SIZE).to(
+            config.DEVICE)
+        real = real * 2.0 - 1.0
+        with torch.no_grad():
+            embed = config.MODEL_EMBEDDER.encode(data['prompt'], batch_size=bs, show_progress_bar=False, convert_to_tensor=True, convert_to_numpy=False, normalize_embeddings=True).to(
+                config.DEVICE)
         cur_batch_size = real.shape[0]
 
         # Train Critic: max E[critic(real)] - E[critic(fake)] <-> min -E[critic(real)] + E[critic(fake)]
-        # which is equivalent to minimizing the negative of the expression
+        # which is equivalent to minimizing the negative of the expression,
         noise = torch.randn(cur_batch_size, config.Z_DIM, 1, 1).to(config.DEVICE)
 
-        with torch.cuda.amp.autocast():
-            fake = gen(noise, embed, alpha, step)
-            critic_real = critic(real, embed, alpha, step)
-            critic_fake = critic(fake.detach(), embed, alpha, step)
-            gp = gradient_penalty(critic, embed, real, fake, alpha, step, device=config.DEVICE)
-            loss_critic = (
-                    -(torch.mean(critic_real) - torch.mean(critic_fake))
-                    + config.LAMBDA_GP * gp
-                    + (0.001 * torch.mean(critic_real ** 2))
-            )
+        for _ in range(config.CRITIC_ITERATIONS):
+            with torch.cuda.amp.autocast():
+                fake = gen(noise, embed, alpha, step)
+                critic_real = critic(real, embed, alpha, step)
+                critic_fake = critic(fake.detach(), embed, alpha, step)
+                gp = gradient_penalty(critic, embed, real, fake, alpha, step, device=config.DEVICE)
+                loss_critic = (
+                        -(torch.mean(critic_real) - torch.mean(critic_fake))
+                        + config.LAMBDA_GP * gp
+                        + (0.001 * torch.mean(critic_real ** 2))
+                )
 
-        opt_critic.zero_grad()
-        scaler_critic.scale(loss_critic).backward()
-        scaler_critic.step(opt_critic)
-        scaler_critic.update()
+            opt_critic.zero_grad()
+            scaler_critic.scale(loss_critic).backward()
+            scaler_critic.step(opt_critic)
+            scaler_critic.update()
 
         # Train Generator: max E[critic(gen_fake)] <-> min -E[critic(gen_fake)]
         with torch.cuda.amp.autocast():
@@ -99,9 +94,11 @@ def main():
     gen = Generator(
         config.Z_DIM, config.IN_CHANNELS, img_channels=config.CHANNELS_IMG
     ).to(config.DEVICE)
+    initialize_weights(gen)
     critic = Discriminator(
         config.Z_DIM, config.IN_CHANNELS, img_channels=config.CHANNELS_IMG
     ).to(config.DEVICE)
+    initialize_weights(critic)
 
     # initialize optimizers and scalers for FP16 training
     opt_gen = optim.Adam(gen.parameters(), lr=config.LEARNING_RATE, betas=(0.0, 0.99))
